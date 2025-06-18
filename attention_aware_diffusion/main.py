@@ -1,6 +1,8 @@
 import torch
 import argparse
 
+from src.cell_type_specific_GRN_model import celltype_GRN_model
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -40,4 +42,32 @@ def main():
                              'default setting denotes to optimize MLP for one epoch then optimize W for two epochs.')
     parser.add_argument('--save_name', type=str, default='/tmp')
     opt = parser.parse_args()
+    if opt.task == 'celltype_GRN':
+        if opt.setting == 'default':
+            opt.beta = 0.01  # we found beta=0.01 alpha =1 perform better than alpha=0.1 beta=10 after paper submission
+            opt.alpha = 1
+            opt.K1 = 1
+            opt.K2 = 2
+            opt.n_hidden = 128
+            opt.gamma = 0.95
+            opt.lr = 1e-4
+            opt.lr_step_size = 0.99
+            opt.batch_size = 64
+        model = celltype_GRN_model(opt)
+        """if opt.setting == 'test':
+            opt.beta = 0.01
+            opt.alpha = 1
+            opt.K1 = 1
+            opt.K2 = 2
+            opt.n_hidden = 128
+            opt.gamma = 0.95
+            opt.lr = 1e-4
+            opt.lr_step_size = 0.99
+            opt.batch_size = 64
+            model = test_celltype_GRN_model(opt)  # test用的是test模型"""
+        model.train_model()
+
+
+if __name__ == "__main__":
+    main()
 

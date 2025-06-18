@@ -8,23 +8,25 @@ from torch.nn import init
 Tensor = torch.cuda.FloatTensor
 
 
-def kl_loss(z_mean, z_stddev):
+def kl_loss(z_mean, z_stddev):  # KL散度损失函数，是训练VAE时的核心组成之一
     mean_sq = z_mean * z_mean
     stddev_sq = z_stddev * z_stddev
     return 0.5 * torch.mean(mean_sq + stddev_sq - torch.log(stddev_sq) - 1)
 
 
-# followed implement in https://github.com/jariasf/GMVAE/tree/master/pytorch
+# We followed implement in https://github.com/jariasf/GMVAE/tree/master/pytorch
 class LossFunctions:
     eps = 1e-8
 
-    def reconstruction_loss(self, real, predicted, dropout_mask=None, rec_type='mse'):
-        if rec_type == 'mse':
-            if dropout_mask is not None:
+    def reconstruction_loss(self, real, predicted, dropout_mask=None, rec_type='mse'):  #
+        # 重建损失函数，原始输入、模型重建的输出(decoder的输出)、掩码矩阵、损失函数类型(mse\bce)
+        if rec_type == 'mse':  # 均方误差
+            if dropout_mask is None:
                 loss = torch.mean((real - predicted).pow(2))
             else:
                 loss = torch.sum((real - predicted).pow(2) * dropout_mask) / torch.sum(dropout_mask)
-        elif rec_type == 'bce':
+                # 有 dropout 掩码时，只对原始表达值为 非 0 的位置计算误差，避免模型对 原始为 0（可能是技术 dropout） 的位置过拟合
+        elif rec_type == 'bce':  # 二元交叉熵，注意这里没有掩码处理，适用于输出为概率（0～1）的问题。
             loss = F.binary_cross_entropy(predicted, real, reduction='none').mean()
         else:
             raise Exception
@@ -87,6 +89,7 @@ class Gaussian(nn.Module):
         logvar = self.var(x)
         return mu.squeeze(2), logvar.squeeze(2)
 
+
 class InferenceNet(nn.Module):
     def __init__(self, x_dim, z_dim, y_dim, n_gene, nonLinear):
         super(InferenceNet, self).__init__()
@@ -100,9 +103,9 @@ class InferenceNet(nn.Module):
         self.inference_qzyx = torch.nn.ModuleList([
             nn.Linear(x_dim + y_dim, z_dim),
             nonLinear,
-            nn.Linear(z_dim,z_dim),
+            nn.Linear(z_dim, z_dim),
             nonLinear,
-            Gaussian(z_dim,1)
+            Gaussian(z_dim, 1)
         ])
 
     def reparameterize(self, mu, var):
@@ -111,6 +114,7 @@ class InferenceNet(nn.Module):
         z = mu + noise * std
 
         return z
+
     def qyx(self, x, temperature):
         num_layers = len(self.inference_qyx)
         for i, layer in enumerate(self.inference_qyx):
@@ -140,8 +144,8 @@ class InferenceNet(nn.Module):
 
 
 class GenerativeNet(nn.Module):
-    def __init__(self,x_dim,z_dim,y_dim,n_gene,nonLinear):
-        super(GenerativeNet,self).__init__()
+    def __init__(self, x_dim, z_dim, y_dim, n_gene, nonLinear):
+        super(GenerativeNet, self).__init__()
         self.n_gene = n_gene
         self.y_mu = nn.Sequential(nn.Linear(y_dim, z_dim), nonLinear, nn.Linear(z_dim, n_gene))
         self.y_var = nn.Sequential(nn.Linear(y_dim, z_dim), nonLinear, nn.Linear(z_dim, n_gene))
@@ -175,13 +179,12 @@ class GenerativeNet(nn.Module):
 
 
 class VAE_EAD(nn.Module):
-    def __init__(self, adj_A, z_dim, x_dim, y_dim):
+    def __init__(self, adj_A, x_dim, z_dim, y_dim):
         super(VAE_EAD, self).__init__()
         self.adj_A = nn.Parameter(Variable(torch.from_numpy(adj_A).double(), requires_grad=True, name='adj_A'))
         self.n_gene = n_gene = len(adj_A)
-
         nonLinear = nn.Tanh()
-        self.inference = InferenceNet(x_dim, y_dim, n_gene, nonLinear)
+        self.inference = InferenceNet(x_dim, z_dim, y_dim, n_gene, nonLinear)
         self.generative = GenerativeNet(x_dim, z_dim, y_dim, n_gene, nonLinear)
         self.losses = LossFunctions()
         for m in self.modules():
@@ -189,7 +192,6 @@ class VAE_EAD(nn.Module):
                 torch.nn.init.xavier_normal_(m.weight)
                 if m.bias.data is not None:
                     init.constant_(m.bias, 0)
-
 
     def _one_minus_A_t(self, adj):
         adj_normalized = Tensor(np.eye(adj.shape[0])) - (adj.transpose(0, 1))

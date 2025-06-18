@@ -10,16 +10,24 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import TensorDataset
 from src.utils import evaluate, extract_Edges
 from src.Model import VAE_EAD
+from src.picture import show_picture
+
+history = {
+        'total_loss': [],
+        'mse_loss': [],
+        'kl_loss': [],
+        'sparse_loss': []
+    }
 
 class celltype_GRN_model():
-    def __init__(self,opt):
+    def __init__(self, opt):
         self.opt = opt
         try:
             os.mkdir(opt.save_name)
         except:
             print('dir exist')
 
-    def initalize_A(self,data):
+    def initalize_A(self, data):
         num_genes = data.shape[1]  # 获取基因数量
         A = np.ones([num_genes, num_genes]) / (num_genes - 1) + (
                 np.random.rand(num_genes * num_genes) * 0.0002).reshape(  # 初始化矩阵
@@ -79,7 +87,6 @@ class celltype_GRN_model():
         truth_edges = set(zip(idx_send, idx_rec))  # send是调控者，rec是被调控者
         return dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TF_mask, gene_name,
 
-
     def train_model(self):
         dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TFmask2, gene_name = self.init_data()
         adj_A_init = self.initalize_A(data)  # 初始的基因调控网络的邻接矩阵
@@ -119,11 +126,19 @@ class celltype_GRN_model():
                 else:
                     optimizer2.step()
             scheduler.step()
+            history['total_loss'].append(np.mean(loss_all))
+            history['mse_loss'].append(np.mean(mse_rec))
+            history['kl_loss'].append(np.mean(loss_kl))
+            history['sparse_loss'].append(np.mean(loss_sparse))
             if epoch % (self.opt.K1 + self.opt.K2) >= self.opt.K1:
                 Ep, Epr = evaluate(vae.adj_A.cpu().detach().numpy(), truth_edges, Evaluate_Mask)
                 best_Epr = max(Epr, best_Epr)
                 print('epoch:', epoch, 'Ep:', Ep, 'Epr:', Epr, 'loss:',
                       np.mean(loss_all), 'mse_loss:', np.mean(mse_rec), 'kl_loss:', np.mean(loss_kl), 'sparse_loss:',
                       np.mean(loss_sparse))
-        extractEdgesFromMatrix(vae.adj_A.cpu().detach().numpy(), gene_name, TFmask2).to_csv(
+        df = pd.DataFrame(history)
+        df.to_csv('history.csv', index=False)
+        show_picture(history)
+        extract_Edges(vae.adj_A.cpu().detach().numpy(), gene_name, TFmask2).to_csv(
             self.opt.save_name + '/GRN_inference_result.tsv', sep='\t', index=False)
+
