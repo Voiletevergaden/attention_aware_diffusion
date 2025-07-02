@@ -1,7 +1,9 @@
 import torch
 import argparse
 
-from src.cell_type_specific_GRN_model import celltype_GRN_model
+from model.cell_type_specific_GRN_model import celltype_GRN_model
+from model.generation_model import deepsem_generation
+from model.GRN_embeding import deepsem_embed
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -66,8 +68,36 @@ def main():
             opt.batch_size = 64
             model = test_celltype_GRN_model(opt)  # test用的是test模型"""
         model.train_model()
+    elif opt.task == 'simulation':
+        if opt.setting == 'default':
+            opt.n_epochs = 120
+            opt.beta = 1
+            opt.alpha = 10
+            opt.K1 = 1
+            opt.K2 = 2
+            opt.n_hidden = 128
+            opt.gamma = 0.95
+            opt.lr = 1e-4
+            opt.lr_step_size = 0.99
+            opt.batch_size = 64
+        model = deepsem_generation(opt).to(device)
+        model.train_model()
+    elif opt.task == 'embedding':
+        if opt.setting == 'default':
+            opt.n_epochs = 120
+            opt.beta = 1
+            opt.alpha = 10
+            opt.K1 = 1
+            opt.K2 = 2
+            opt.n_hidden = 128
+            opt.gamma = 0.95
+            opt.lr = 1e-4
+            opt.lr_step_size = 0.99
+            opt.batch_size = 64
+            opt.K = 1
+        model = deepsem_embed(opt).to(device)
+        model.train_model()
 
 
 if __name__ == "__main__":
     main()
-
