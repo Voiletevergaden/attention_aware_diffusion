@@ -95,7 +95,7 @@ def main():
             opt.lr_step_size = 0.99
             opt.batch_size = 64
             opt.K = 1
-        model = deepsem_embed(opt).to(device)
+        model = deepsem_embed(opt)
         model.train_model()
 
 

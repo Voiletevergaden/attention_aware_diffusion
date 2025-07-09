@@ -10,8 +10,16 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import TensorDataset
 
 from src.Model import VAE_EAD
+from src.picture import show_picture
 
 Tensor = torch.cuda.FloatTensor
+
+history = {
+    'total_loss': [],
+    'mse_loss': [],
+    'kl_loss': [],
+    'sparse_loss': []
+}
 
 
 class deepsem_embed:
@@ -24,7 +32,8 @@ class deepsem_embed:
 
     def initalize_A(self, data):
         num_genes = data.shape[1]
-        A = np.ones([num_genes, num_genes]) / (num_genes - 1) + (np.random.rand(num_genes * num_genes) * 0.0002).reshape(
+        A = np.ones([num_genes, num_genes]) / (num_genes - 1) + (
+                    np.random.rand(num_genes * num_genes) * 0.0002).reshape(
             [num_genes, num_genes])
         for i in range(len(A)):
             A[i, i] = 0
@@ -102,15 +111,22 @@ class deepsem_embed:
                   np.mean(loss_all), 'mse_loss:', np.mean(mse_rec), 'kl_loss:', np.mean(loss_kl), 'sparse_loss:',
                   np.mean(loss_sparse))
             scheduler.step()
+            history['total_loss'].append(np.mean(loss_all))
+            history['mse_loss'].append(np.mean(mse_rec))
+            history['kl_loss'].append(np.mean(loss_kl))
+            history['sparse_loss'].append(np.mean(loss_sparse))
 
         data_ids = []
         embeds = []
+        df = pd.DataFrame(history)
+        show_picture(history, self.opt.task)
         for i, data_batch in enumerate(dataloader, 0):
             optimizer.zero_grad()
             inputs, data_id, dropout_mask = data_batch
             inputs = Variable(inputs.type(Tensor))
             loss, loss_rec, loss_gauss, loss_cat, dec, y, hidden2 = vae(inputs,
-                        dropout_mask=dropout_mask.cuda(), temperature=temperature,opt=opt)
+                                                                        dropout_mask=dropout_mask.cuda(),
+                                                                        temperature=temperature, opt=opt)
             data_ids.append(data_id.detach().numpy())
             embeds.append(hidden2.cpu().detach().numpy())
         data_ids = np.hstack(data_ids)
@@ -120,4 +136,4 @@ class deepsem_embed:
             data_id_map[item] = i
         embeds = embeds[data_id_map.astype(int)]
         adata = sc.AnnData(embeds)
-        adata.write_h5ad(opt.save_name + '/embedding.h5ad')
+        adata.write_h5ad(opt.save_name + '/embedding_2.h5ad')
